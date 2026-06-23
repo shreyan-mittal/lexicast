@@ -1,0 +1,17 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/cookies.txt
+
+# Node
+frontend/node_modules/
+frontend/build/
+
+# macOS
+.DS_Store
+Icon
+
+# env
+.env
+*.env
