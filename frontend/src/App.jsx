@@ -360,6 +360,21 @@ const styles = {
     fontFamily: "'Lora', serif",
     borderTop: "1px solid #F3F4F6",
   },
+  learningCard: (expanded) => ({
+    background: "#fff",
+    border: "1px solid #EAEDF2",
+    borderRadius: 12,
+    overflow: "hidden",
+    boxShadow: expanded ? "0 4px 16px rgba(0,0,0,0.08)" : "0 1px 3px rgba(0,0,0,0.04)",
+    cursor: "pointer",
+  }),
+  learningInsight: {
+    fontSize: 15,
+    fontWeight: 600,
+    color: "#111827",
+    lineHeight: 1.5,
+    flex: 1,
+  },
 };
 
 function VocabCard({ item, index }) {
@@ -435,13 +450,38 @@ function PhraseCard({ item, index }) {
   );
 }
 
+function LearningCard({ item, index }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div style={styles.learningCard(expanded)} onClick={() => setExpanded((e) => !e)}>
+      <div style={styles.cardHeader}>
+        <div style={{ ...styles.cardIndex, background: "#FEF3C7", color: "#D97706" }}>{index + 1}</div>
+        <div style={styles.learningInsight}>{item.insight}</div>
+        <span style={styles.chevron(expanded)}>▼</span>
+      </div>
+      {expanded && (
+        <div style={styles.cardBody}>
+          <div style={{ fontSize: 14, color: "#4B5563", lineHeight: 1.7 }}>{item.detail}</div>
+          {item.quote && (
+            <div style={styles.quoteBlock("#F59E0B")}>
+              <div style={styles.quoteLabel}>From the podcast</div>
+              <div style={styles.quoteText}>"{item.quote}"</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState("idle"); // idle | loading | result
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
-  const [activeTab, setActiveTab] = useState("vocab");
+  const [activeTab, setActiveTab] = useState("learnings");
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
+  const [emailStatus, setEmailStatus] = useState("idle"); // idle | sending | sent | error
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -487,7 +527,34 @@ export default function App() {
     setUrl("");
     setResult(null);
     setError("");
-    setActiveTab("vocab");
+    setActiveTab("learnings");
+    setEmailStatus("idle");
+  };
+
+  const handleSendEmail = async () => {
+    if (!result) return;
+    setEmailStatus("sending");
+    try {
+      const res = await fetch("http://localhost:8000/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: result.source,
+          summary: result.summary,
+          vocabulary: result.vocabulary || [],
+          phrases: result.phrases || [],
+          key_learnings: result.key_learnings || [],
+          word_count: result.word_count,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to send");
+      setEmailStatus("sent");
+      setTimeout(() => setEmailStatus("idle"), 4000);
+    } catch (err) {
+      setEmailStatus("error");
+      setTimeout(() => setEmailStatus("idle"), 4000);
+    }
   };
 
   return (
@@ -506,9 +573,23 @@ export default function App() {
           Lexi<span style={styles.logoSpan}>Cast</span>
         </div>
         {state === "result" && (
-          <button style={styles.newFileBtn} onClick={handleReset}>
-            ← New video
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              style={{
+                ...styles.newFileBtn,
+                background: emailStatus === "sent" ? "#065F46" : emailStatus === "error" ? "#7F1D1D" : "#1E40AF",
+                border: "none",
+                opacity: emailStatus === "sending" ? 0.6 : 1,
+              }}
+              onClick={handleSendEmail}
+              disabled={emailStatus === "sending"}
+            >
+              {emailStatus === "sending" ? "Sending..." : emailStatus === "sent" ? "✓ Sent!" : emailStatus === "error" ? "Failed" : "✉ Send to email"}
+            </button>
+            <button style={styles.newFileBtn} onClick={handleReset}>
+              ← New video
+            </button>
+          </div>
         )}
       </header>
 
@@ -564,12 +645,16 @@ export default function App() {
               <div style={styles.summaryText}>{result.summary}</div>
               <div style={styles.summaryStats}>
                 <div style={styles.stat}>
+                  <span style={styles.statNum}>{result.key_learnings?.length || 0}</span>
+                  <span style={styles.statLabel}>Key learnings</span>
+                </div>
+                <div style={styles.stat}>
                   <span style={styles.statNum}>{result.vocabulary?.length || 0}</span>
-                  <span style={styles.statLabel}>Words extracted</span>
+                  <span style={styles.statLabel}>Vocab words</span>
                 </div>
                 <div style={styles.stat}>
                   <span style={styles.statNum}>{result.phrases?.length || 0}</span>
-                  <span style={styles.statLabel}>Phrases extracted</span>
+                  <span style={styles.statLabel}>Key phrases</span>
                 </div>
                 <div style={styles.stat}>
                   <span style={styles.statNum}>{result.word_count?.toLocaleString()}</span>
@@ -579,6 +664,9 @@ export default function App() {
             </div>
 
             <div style={styles.tabBar}>
+              <button style={styles.tab(activeTab === "learnings")} onClick={() => setActiveTab("learnings")}>
+                Key Learnings
+              </button>
               <button style={styles.tab(activeTab === "vocab")} onClick={() => setActiveTab("vocab")}>
                 Vocabulary
               </button>
@@ -588,6 +676,10 @@ export default function App() {
             </div>
 
             <div style={styles.cardList}>
+              {activeTab === "learnings" &&
+                (result.key_learnings || []).map((item, i) => (
+                  <LearningCard key={i} item={item} index={i} />
+                ))}
               {activeTab === "vocab" &&
                 (result.vocabulary || []).map((item, i) => (
                   <VocabCard key={i} item={item} index={i} />

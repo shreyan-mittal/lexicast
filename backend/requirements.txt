@@ -5,3 +5,4 @@ openai-whisper
 torch
 yt-dlp
 pydantic
+youtube-transcript-api
