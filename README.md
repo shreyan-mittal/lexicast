@@ -1,14 +1,17 @@
 # LexiCast
 
-Extract advanced English vocabulary and key phrases from any YouTube video — paste a link, get a curated word list grounded in real usage.
+Extract advanced English vocabulary, key phrases, and core insights from any YouTube video — paste a link, get a curated breakdown grounded in real usage, and optionally email it to yourself.
 
 ## How it works
 
-1. You paste a YouTube URL
-2. LexiCast tries to grab the auto-generated subtitles (fast)
-3. If no subtitles exist, it downloads the audio and transcribes it locally with Whisper
-4. The transcript is sent to Claude, which extracts 8–12 vocabulary words and 6–10 phrases
-5. Results appear as expandable cards with definitions, context quotes, and usage tips
+1. Paste a YouTube URL
+2. LexiCast fetches the transcript via the YouTube Transcript API (fast, no download needed)
+3. If no transcript is available, it downloads the audio and transcribes it locally with Whisper
+4. The transcript is sent to Claude, which extracts:
+   - **Key learnings** — the most important insights with supporting quotes
+   - **Vocabulary** — sophisticated words with definitions and in-context examples
+   - **Phrases** — idioms, collocations, and discourse markers with usage tips
+5. Results appear as expandable cards; hit **Send to email** to get a styled HTML digest in your inbox
 
 ---
 
@@ -18,38 +21,41 @@ Extract advanced English vocabulary and key phrases from any YouTube video — p
 
 - Python 3.9+
 - Node.js 18+
-- `ffmpeg` installed (required by Whisper for audio processing)
+- `ffmpeg` (only needed for Whisper fallback)
   ```bash
-  # macOS
-  brew install ffmpeg
-
-  # Ubuntu/Debian
-  sudo apt install ffmpeg
+  brew install ffmpeg          # macOS
+  sudo apt install ffmpeg     # Ubuntu/Debian
   ```
 
-### 1. Get an Anthropic API key
-
-Sign up at [console.anthropic.com](https://console.anthropic.com), create a key, and set it:
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-Add this to your `~/.zshrc` or `~/.bashrc` to make it permanent.
-
-### 2. Backend
+### 1. Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
+source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+```
+
+Create `backend/.env`:
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional — required only for the Send to email feature
+GMAIL_USER=you@gmail.com
+GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx   # Gmail App Password (not your login password)
+TO_EMAIL=recipient@example.com
+```
+
+> To generate a Gmail App Password: Google Account → Security → 2-Step Verification → App passwords.
+
+Start the server:
+
+```bash
 uvicorn main:app --reload --port 8000
 ```
 
-> **First run:** Whisper will automatically download the `base` model (~145MB) and cache it at `~/.cache/whisper/`. This happens only once.
-
-### 3. Frontend
+### 2. Frontend
 
 ```bash
 cd frontend
@@ -61,42 +67,33 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## Whisper model sizes
+## Email digest
 
-If you want more accuracy (at the cost of speed), change `"base"` in `backend/main.py` to any of:
-
-| Model    | Size   | Speed      | Accuracy  |
-|----------|--------|------------|-----------|
-| tiny     | ~39MB  | Very fast  | Lower     |
-| base     | ~145MB | Fast       | Good      |
-| small    | ~244MB | Moderate   | Better    |
-| medium   | ~769MB | Slow       | Very good |
-| large    | ~1.5GB | Very slow  | Best      |
-
-For most podcasts and lectures, `base` or `small` is sufficient.
+When `GMAIL_USER`, `GMAIL_APP_PASSWORD`, and `TO_EMAIL` are set in `backend/.env`, the **Send to email** button in the header delivers a fully formatted HTML email with all key learnings, vocabulary, and phrases — useful for reviewing on the go.
 
 ---
 
-## Deployment
+## Whisper fallback
 
-### Backend → Railway
+If a YouTube transcript isn't available, LexiCast falls back to local Whisper transcription.
 
-1. Push the `backend/` folder to a GitHub repo
-2. Create a new Railway project, connect the repo
-3. Add environment variable: `ANTHROPIC_API_KEY=sk-ant-...`
-4. Railway auto-detects Python and runs `uvicorn main:app --host 0.0.0.0 --port $PORT`
+| Model  | Size   | Speed      | Accuracy  |
+|--------|--------|------------|-----------|
+| tiny   | ~39MB  | Very fast  | Lower     |
+| base   | ~145MB | Fast       | Good      |
+| small  | ~244MB | Moderate   | Better    |
+| medium | ~769MB | Slow       | Very good |
+| large  | ~1.5GB | Very slow  | Best      |
 
-### Frontend → Vercel
+Change the model name in `backend/main.py` (`whisper.load_model(...)`) to trade speed for accuracy. `base` is the default and works well for most podcasts and lectures.
 
-1. Update the fetch URL in `App.jsx` from `http://localhost:8000` to your Railway backend URL
-2. Push `frontend/` to GitHub
-3. Import into Vercel — it auto-detects Create React App
+> First run: Whisper downloads the model (~145MB for `base`) to `~/.cache/whisper/` — one-time only.
 
 ---
 
 ## Notes
 
 - Videos must be public and in English
-- Auto-generated subtitles are used when available (much faster than Whisper)
-- Whisper transcription can take 30–90 seconds for longer videos
-- The minimum transcript length is 30 words; very short clips will be rejected
+- Transcripts are capped at ~18,000 words; longer videos are intelligently sampled (beginning, middle, end)
+- Minimum transcript length is 30 words — very short clips are rejected
+- The `.env` file is reloaded on each request, so key changes take effect without restarting the server
