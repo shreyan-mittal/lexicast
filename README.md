@@ -33,7 +33,7 @@ Extract advanced English vocabulary, key phrases, and core insights from any You
 cd backend
 python -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements-local.txt   # includes Whisper for local fallback
 ```
 
 Create `backend/.env`:
@@ -88,6 +88,34 @@ If a YouTube transcript isn't available, LexiCast falls back to local Whisper tr
 Change the model name in `backend/main.py` (`whisper.load_model(...)`) to trade speed for accuracy. `base` is the default and works well for most podcasts and lectures.
 
 > First run: Whisper downloads the model (~145MB for `base`) to `~/.cache/whisper/` — one-time only.
+
+---
+
+## Deployment (free)
+
+### Backend → Render
+
+1. Go to [render.com](https://render.com), create a new **Web Service**, connect your GitHub repo
+2. Set **Root Directory** to `backend`
+3. Set **Build Command** to `pip install -r requirements.txt`
+4. Set **Start Command** to `uvicorn main:app --host 0.0.0.0 --port $PORT`
+5. Add environment variables: `ANTHROPIC_API_KEY`, `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `TO_EMAIL`
+6. Deploy — copy the public URL (e.g. `https://lexicast.onrender.com`)
+
+> Render's free tier spins down after 15 min of inactivity — the first request may take ~30–60s to wake up. Whisper is not available in production; videos without a YouTube transcript will return a friendly error instead.
+
+### Frontend → Vercel
+
+1. In `frontend/src/App.jsx`, replace `http://localhost:8000` with your Render URL
+2. Go to [vercel.com](https://vercel.com), import your repo, set **Root Directory** to `frontend`
+3. Deploy
+
+### Local vs production requirements
+
+| File | Used for |
+|---|---|
+| `requirements-local.txt` | Local dev — includes Whisper + torch |
+| `requirements.txt` | Production (Render) — lightweight, no Whisper |
 
 ---
 

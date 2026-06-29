@@ -15,7 +15,11 @@ _ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(_ENV_PATH, override=True)
 
 import anthropic
-import whisper
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -151,6 +155,9 @@ def transcribe_audio(url: str, tmpdir: str) -> str:
             if fname.startswith("audio."):
                 mp3_path = os.path.join(tmpdir, fname)
                 break
+
+    if not WHISPER_AVAILABLE:
+        raise HTTPException(status_code=400, detail="This video has no transcript available. Whisper transcription is not enabled in this environment.")
 
     model = whisper.load_model("base")
     result = model.transcribe(mp3_path, fp16=False, language="en")
